@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Key Management & Audit Console</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Chart.js for Usage Visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Navigation Header -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="brand-logo">🛡️</div>
+        <div class="brand-text">
+          <h1>KeyShield Gateway</h1>
+          <span class="badge badge-success">Multi-Tenant v1.0</span>
+        </div>
+      </div>
+      
+      <div class="tenant-selector-container">
+        <label for="tenantSelect">Active Tenant:</label>
+        <select id="tenantSelect" class="form-select"></select>
+        <button id="refreshBtn" class="btn btn-secondary" title="Refresh data">🔄 Refresh</button>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Container -->
+    <main class="dashboard-content">
+      
+      <!-- Top Metrics Bar -->
+      <section class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-title">Active API Keys</div>
+          <div class="stat-value" id="statActiveKeys">0</div>
+          <div class="stat-sub">Across current tenant</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">Requests (Past Hour)</div>
+          <div class="stat-value" id="statTotalRequests">0</div>
+          <div class="stat-sub">Tracked in audit log</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">Rate Limited (429)</div>
+          <div class="stat-value text-warning" id="statRateLimited">0</div>
+          <div class="stat-sub">Sliding-window throttles</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">Gateway Health</div>
+          <div class="stat-value text-success" id="statHealth">Healthy</div>
+          <div class="stat-sub">PostgreSQL & Redis Active</div>
+        </div>
+      </section>
+
+      <!-- API Keys Management Section -->
+      <section class="card mb-4">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>API Credentials</h2>
+            <p>Manage hashed API keys, configure rate quotas, and trigger key rotations</p>
+          </div>
+          <button id="openIssueModalBtn" class="btn btn-primary">+ Issue New API Key</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table" id="keysTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Masked Key</th>
+                <th>Rate Quota</th>
+                <th>Status</th>
+                <th>Expires / Grace</th>
+                <th>Created At</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="keysTableBody">
+              <tr>
+                <td colspan="7" class="text-center text-muted">Loading credentials...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Usage Visualization & API Test Simulator -->
+      <div class="grid-2-col mb-4">
+        
+        <!-- Usage Visualization (Chart.js) -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Request Volume (Past Hour)</h2>
+              <p>Real-time traffic breakdown: 200 OK vs 429 Throttled</p>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="usageChart"></canvas>
+          </div>
+        </section>
+
+        <!-- Live API Test Simulator -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Interactive Gateway Sandbox</h2>
+              <p>Test protected endpoint authentication and sliding-window rate limits</p>
+            </div>
+          </div>
+          <div class="sandbox-body">
+            <div class="form-group mb-2">
+              <label for="sandboxKey">API Key to test:</label>
+              <input type="text" id="sandboxKey" class="form-input" placeholder="Paste full plaintext key (sk_live_...)">
+            </div>
+
+            <div class="button-row mb-3">
+              <button id="sendSingleReqBtn" class="btn btn-primary">Send 1 Request</button>
+              <button id="sendBurstReqBtn" class="btn btn-warning">Burst 6 Requests (Test 429)</button>
+              <button id="clearOutputBtn" class="btn btn-secondary">Clear Log</button>
+            </div>
+
+            <div class="sandbox-output-container">
+              <div class="output-header">Live Response Console</div>
+              <pre id="sandboxOutput" class="sandbox-output">Ready. Select or generate an API key above, then send requests to observe rate limiting in action.</pre>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Audit Log Table Section -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Audit Logs</h2>
+            <p>Cryptographically verified immutable record of all protected endpoint traffic</p>
+          </div>
+          <div class="pagination-controls">
+            <button id="prevPageBtn" class="btn btn-sm btn-secondary" disabled>&larr; Previous</button>
+            <span id="pageInfo" class="page-info">Page 1 of 1</span>
+            <button id="nextPageBtn" class="btn btn-sm btn-secondary" disabled>Next &rarr;</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table" id="auditTable">
+            <thead>
+              <tr>
+                <th>Log ID</th>
+                <th>Key Used</th>
+                <th>Endpoint</th>
+                <th>Status Code</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody">
+              <tr>
+                <td colspan="5" class="text-center text-muted">Loading audit entries...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: Issue New Key -->
+  <div class="modal-backdrop" id="issueModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Issue New API Key</h3>
+        <button class="modal-close" data-close="issueModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group mb-3">
+          <label for="newKeyRateLimit">Rate Limit (requests per minute):</label>
+          <input type="number" id="newKeyRateLimit" class="form-input" value="100" min="1" max="10000">
+          <small class="text-muted">Enter a quota for sliding-window enforcement (e.g. 5 for testing throttles, 100 for standard).</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="issueModal">Cancel</button>
+        <button id="confirmIssueBtn" class="btn btn-primary">Generate API Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: One-time Key Display -->
+  <div class="modal-backdrop" id="keyResultModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>API Key Generated Successfully</h3>
+        <button class="modal-close" data-close="keyResultModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning mb-3">
+          <strong>Security Warning:</strong> This is the only time your full plaintext API key will be displayed. It is stored as a SHA-256 hash and cannot be recovered later.
+        </div>
+        <div class="key-display-box mb-3">
+          <code id="generatedKeyText"></code>
+          <button id="copyKeyBtn" class="btn btn-sm btn-secondary">Copy</button>
+        </div>
+        <p class="text-muted mb-0">The key has also been pre-filled into the interactive test sandbox below for immediate testing.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" data-close="keyResultModal">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Rotate Key Confirmation -->
+  <div class="modal-backdrop" id="rotateModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Confirm Key Rotation</h3>
+        <button class="modal-close" data-close="rotateModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to rotate key <strong id="rotateKeyMask"></strong>?</p>
+        <div class="alert alert-info">
+          A new API key will be generated immediately. The old key will remain valid for a <strong>60-second grace period</strong> to allow zero-downtime client migrations, after which it will expire.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="rotateModal">Cancel</button>
+        <button id="confirmRotateBtn" class="btn btn-warning">Rotate Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Revoke Key Confirmation -->
+  <div class="modal-backdrop" id="revokeModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Confirm Key Revocation</h3>
+        <button class="modal-close" data-close="revokeModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to immediately revoke key <strong id="revokeKeyMask"></strong>?</p>
+        <div class="alert alert-danger">
+          <strong>Immediate Effect:</strong> This key will be deactivated instantly. Any incoming requests using this key will immediately return <code>401 Unauthorized</code>.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="revokeModal">Cancel</button>
+        <button id="confirmRevokeBtn" class="btn btn-danger">Revoke Immediately</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

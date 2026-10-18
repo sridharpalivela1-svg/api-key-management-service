@@ -1,0 +1,29 @@
+{
+  "name": "api-key-management-service",
+  "version": "1.0.0",
+  "description": "Secure, multi-tenant API key management service with sliding-window rate limiting and audit logging",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node scripts/test-suite.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ioredis": "^5.4.2",
+    "pg": "^8.13.1"
+  },
+  "keywords": [
+    "api-keys",
+    "rate-limiting",
+    "redis",
+    "postgresql",
+    "security",
+    "multi-tenant"
+  ],
+  "author": "",
+  "license": "MIT"
+}
